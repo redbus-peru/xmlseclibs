@@ -67,7 +67,7 @@ class XMLSecurityDSig
   </ds:SignedInfo>
 </ds:Signature>';
 
-    const BASE_TEMPLATE = '<Signature xmlns="http://www.w3.org/2000/09/xmldsig#">
+    const BASE_TEMPLATE = '<Signature Id="signature" xmlns="http://www.w3.org/2000/09/xmldsig#">
   <SignedInfo>
     <SignatureMethod />
   </SignedInfo>
@@ -104,9 +104,20 @@ class XMLSecurityDSig
     private $validatedNodes = null;
 
     /**
-     * @param string $prefix
+     * @var string Signature value
      */
-    public function __construct($prefix='ds')
+    private $sigValue = null;
+
+    /**
+     * @var string digest value
+     */
+    private $digestValue = null;
+
+    /**
+     * @param string $prefix
+     * @param int $signId
+     */
+    public function __construct($prefix='ds', $signId = null)
     {
         $template = self::BASE_TEMPLATE;
         if (! empty($prefix)) {
@@ -115,9 +126,29 @@ class XMLSecurityDSig
             $replace = array("<$prefix:S", "</$prefix:S", "xmlns:$prefix=");
             $template = str_replace($search, $replace, $template);
         }
+        if (!empty($signId)) {
+            $template = str_replace("Id=\"signature\"", "Id=\"signature{$signId}\"", $template);
+        }
+
         $sigdoc = new DOMDocument();
         $sigdoc->loadXML($template);
         $this->sigNode = $sigdoc->documentElement;
+    }
+
+    /**
+     * @return string
+     */
+    public function getSigValue()
+    {
+        return $this->sigValue;
+    }
+
+    /**
+     * @return string
+     */
+    public function getDigestValue()
+    {
+        return $this->digestValue;
     }
 
     /**
@@ -672,6 +703,8 @@ class XMLSecurityDSig
 
         $canonicalData = $this->processTransforms($refNode, $node);
         $digValue = $this->calculateDigest($algorithm, $canonicalData);
+        //set the value
+        $this->digestValue = $digValue;
 
         $digestMethod = $this->createNewSignNode('DigestMethod');
         $refNode->appendChild($digestMethod);
@@ -803,28 +836,6 @@ class XMLSecurityDSig
 
     /**
      * @param XMLSecurityKey $objKey
-     * @return null|string
-     */
-    public function getSignature($objKey)
-    {
-        if ($xpath = $this->getXPathObj()) {
-            $query = "./secdsig:SignedInfo";
-            $nodeset = $xpath->query($query, $this->sigNode);
-            if ($sInfo = $nodeset->item(0)) {
-                $query = "./secdsig:SignatureMethod";
-                $nodeset = $xpath->query($query, $sInfo);
-                $sMethod = $nodeset->item(0);
-                $sMethod->setAttribute('Algorithm', $objKey->type);
-                $data = $this->canonicalizeData($sInfo, $this->canonicalMethod);
-                return base64_encode($objKey->signData($data));
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * @param XMLSecurityKey $objKey
      * @param null|DOMNode $appendToNode
      */
     public function sign($objKey, $appendToNode = null)
@@ -845,6 +856,8 @@ class XMLSecurityDSig
                 $sMethod->setAttribute('Algorithm', $objKey->type);
                 $data = $this->canonicalizeData($sInfo, $this->canonicalMethod);
                 $sigValue = base64_encode($this->signData($objKey, $data));
+                //set the value
+                $this->sigValue = $sigValue;
                 $sigValueNode = $this->createNewSignNode('SignatureValue', $sigValue);
                 if ($infoSibling = $sInfo->nextSibling) {
                     $infoSibling->parentNode->insertBefore($sigValueNode, $infoSibling);
