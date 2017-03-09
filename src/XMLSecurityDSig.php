@@ -803,6 +803,28 @@ class XMLSecurityDSig
 
     /**
      * @param XMLSecurityKey $objKey
+     * @return null|string
+     */
+    public function getSignature($objKey)
+    {
+        if ($xpath = $this->getXPathObj()) {
+            $query = "./secdsig:SignedInfo";
+            $nodeset = $xpath->query($query, $this->sigNode);
+            if ($sInfo = $nodeset->item(0)) {
+                $query = "./secdsig:SignatureMethod";
+                $nodeset = $xpath->query($query, $sInfo);
+                $sMethod = $nodeset->item(0);
+                $sMethod->setAttribute('Algorithm', $objKey->type);
+                $data = $this->canonicalizeData($sInfo, $this->canonicalMethod);
+                return base64_encode($objKey->signData($data));
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param XMLSecurityKey $objKey
      * @param null|DOMNode $appendToNode
      */
     public function sign($objKey, $appendToNode = null)
